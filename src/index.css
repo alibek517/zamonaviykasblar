@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    scroll-behavior: smooth;
+    font-family: 'Onest', 'Manrope', system-ui, -apple-system, sans-serif;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* 200px ultra-kichik ekranlar uchun moslashuv */
+  @media (max-width: 310px) {
+    html {
+      font-size: 13px;
+    }
+  }
+
+  @media (max-width: 240px) {
+    html {
+      font-size: 11.5px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
