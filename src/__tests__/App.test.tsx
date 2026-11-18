@@ -2,20 +2,18 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import App from '../App';
 
-describe('App UI, 3 Rol (Mijoz, Sotuvchi, Admin) va Ulgurji Savdo', () => {
+describe('App UI, Ombor zaxirasi (Stock) cheklovi va Ulgurji Savdo', () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('mahsulotlarni ikkala narx va o‘lchov birligi bilan ko‘rsatadi', () => {
+  it('mahsulotlarni ikkala narx, o‘lchov birligi va ombor zaxirasi bilan ko‘rsatadi', () => {
     render(<App />);
 
     expect(screen.getByTestId('product-card-M01')).toBeInTheDocument();
-    expect(screen.getByTestId('product-card-M02')).toBeInTheDocument();
-    expect(screen.getByTestId('product-card-M03')).toBeInTheDocument();
-    expect(screen.getByTestId('product-card-M04')).toBeInTheDocument();
-    expect(screen.getByTestId('product-card-M05')).toBeInTheDocument();
-
+    expect(screen.getByTestId('stock-badge-M01')).toHaveTextContent(
+      'Omborda: 450 pachka'
+    );
     expect(screen.getByTestId('regular-price-M01')).toHaveTextContent(
       "50 000 so'm"
     );
@@ -56,13 +54,14 @@ describe('App UI, 3 Rol (Mijoz, Sotuvchi, Admin) va Ulgurji Savdo', () => {
     );
   });
 
-  it('miqdor 0, -2, 2.5, bo‘sh yoki ism bo‘sh bo‘lsa rad etiladi', () => {
+  it('miqdor 0, -2, 2.5, bo‘sh yoki ombor zaxirasidan (450 pachkadan) ko‘p bo‘lsa rad etiladi', () => {
     render(<App />);
 
     const qtyInput = screen.getByLabelText(/^Miqdor \(/i);
     const nameInput = screen.getByLabelText(/^Ism/i);
     const submitBtn = screen.getByTestId('submit-button');
 
+    // Miqdor 0 va ism bo'sh
     fireEvent.change(qtyInput, { target: { value: '0' } });
     fireEvent.change(nameInput, { target: { value: '   ' } });
     fireEvent.click(submitBtn);
@@ -73,14 +72,18 @@ describe('App UI, 3 Rol (Mijoz, Sotuvchi, Admin) va Ulgurji Savdo', () => {
     expect(nameInput).toHaveAttribute('aria-invalid', 'true');
     expect(screen.queryByTestId('confirmation-modal')).not.toBeInTheDocument();
 
-    fireEvent.change(qtyInput, { target: { value: '-2' } });
-    expect(screen.getByTestId('quantity-error')).toHaveTextContent(/manfiy/i);
+    // Ombor zaxirasidan ko'p (M01 da 450 pachka bor, 451 kiritamiz)
+    fireEvent.change(nameInput, { target: { value: 'Sardor Aliyev' } });
+    fireEvent.change(qtyInput, { target: { value: '451' } });
+    fireEvent.click(submitBtn);
 
-    fireEvent.change(qtyInput, { target: { value: '2.5' } });
-    expect(screen.getByTestId('quantity-error')).toHaveTextContent(/kasr/i);
+    expect(screen.getByTestId('quantity-error')).toHaveTextContent(
+      'Omborda faqat 450 pachka mavjud. Undan ortiq sotib olish mumkin emas!'
+    );
+    expect(screen.queryByTestId('confirmation-modal')).not.toBeInTheDocument();
   });
 
-  it('buyurtma rasmiylashtirilganda modalda ism, mahsulot, miqdor va ulgurji jami chiqadi', () => {
+  it('buyurtma rasmiylashtirilganda ombor zaxirasidan sotilgan miqdor ayriladi (450 -> 447)', () => {
     render(<App />);
 
     fireEvent.click(screen.getByTestId('preset-m01-3'));
@@ -90,15 +93,11 @@ describe('App UI, 3 Rol (Mijoz, Sotuvchi, Admin) va Ulgurji Savdo', () => {
     fireEvent.click(screen.getByTestId('submit-button'));
 
     expect(screen.getByTestId('confirmation-modal')).toBeInTheDocument();
-    expect(screen.getByTestId('modal-customer-name')).toHaveTextContent(
-      'Sardor Aliyev'
+    expect(screen.getByTestId('stock-badge-M01')).toHaveTextContent(
+      'Omborda: 447 pachka'
     );
-    expect(screen.getByTestId('modal-product')).toHaveTextContent(
-      "M01 — A4 qog'oz (pachka)"
-    );
-    expect(screen.getByTestId('modal-quantity')).toHaveTextContent('3 pachka');
-    expect(screen.getByTestId('modal-wholesale-total')).toHaveTextContent(
-      "120 000 so'm"
+    expect(screen.getByTestId('calculator-available-stock')).toHaveTextContent(
+      'Mavjud: 447 pachka'
     );
   });
 

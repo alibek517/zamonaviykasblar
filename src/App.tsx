@@ -237,7 +237,15 @@ export default function App() {
     );
   }, [selectedProductId, products]);
 
-  const qtyCheck = useMemo(() => validateQuantityInput(quantity), [quantity]);
+  const qtyCheck = useMemo(
+    () =>
+      validateQuantityInput(
+        quantity,
+        selectedProduct.stock ?? 200,
+        selectedProduct.unit
+      ),
+    [quantity, selectedProduct.stock, selectedProduct.unit]
+  );
 
   const pricing = useMemo(() => {
     if (!qtyCheck.valid || qtyCheck.value === undefined) {
@@ -263,12 +271,12 @@ export default function App() {
 
   const handleStepQuantity = (delta: number) => {
     setQuantityTouched(true);
-    const currentCheck = validateQuantityInput(quantity);
+    const maxAllowed = Math.min(MAX_QUANTITY, selectedProduct.stock ?? 200);
+    if (maxAllowed <= 0) return;
+    const parsedVal = parseInt(quantity, 10);
     const currentVal =
-      currentCheck.valid && currentCheck.value !== undefined
-        ? currentCheck.value
-        : 0;
-    const nextVal = Math.min(MAX_QUANTITY, Math.max(1, currentVal + delta));
+      !Number.isNaN(parsedVal) && parsedVal > 0 ? parsedVal : 0;
+    const nextVal = Math.min(maxAllowed, Math.max(1, currentVal + delta));
     setQuantity(String(nextVal));
   };
 
@@ -372,6 +380,47 @@ export default function App() {
 
   // Order Management handlers (Supabase DB)
   const handleUpdateOrderStatus = (orderId: string, status: OrderStatus) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (targetOrder && targetOrder.status !== status) {
+      const wasCancelled = targetOrder.status === 'Bekor qilindi';
+      const isNowCancelled = status === 'Bekor qilindi';
+
+      if (!wasCancelled && isNowCancelled) {
+        // Buyurtma bekor qilindi -> zaxirani omborga qaytarish
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (p.id !== targetOrder.productId) return p;
+            const restoredStock = (p.stock ?? 0) + targetOrder.quantity;
+            if (!isTestMode) {
+              void supabase
+                .from('birga_products')
+                .update({ stock: restoredStock })
+                .eq('id', p.id);
+            }
+            return { ...p, stock: restoredStock };
+          })
+        );
+      } else if (wasCancelled && !isNowCancelled) {
+        // Bekor qilingan buyurtma qayta tiklandi -> zaxiradan ayirish
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (p.id !== targetOrder.productId) return p;
+            const deductedStock = Math.max(
+              0,
+              (p.stock ?? 0) - targetOrder.quantity
+            );
+            if (!isTestMode) {
+              void supabase
+                .from('birga_products')
+                .update({ stock: deductedStock })
+                .eq('id', p.id);
+            }
+            return { ...p, stock: deductedStock };
+          })
+        );
+      }
+    }
+
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status } : o))
     );
@@ -459,17 +508,26 @@ export default function App() {
       setOrders((prev) => [newWholesaleOrder, ...prev]);
       const updatedPoolCurrent =
         (validation.product.poolCurrent ?? 20) + validation.quantity;
+      const currentStock = validation.product.stock ?? 200;
+      const updatedStock = Math.max(0, currentStock - validation.quantity);
 
       setProducts((prev) =>
         prev.map((item) =>
           item.id === validation.product.id
             ? {
                 ...item,
+                stock: updatedStock,
                 poolCurrent: updatedPoolCurrent,
               }
             : item
         )
       );
+
+      // Agar qolgan zaxira kiritilgan miqdordan kam bo'lib qolsa, miqdorni moslashtirish
+      if (updatedStock > 0 && validation.quantity > updatedStock) {
+        setQuantity(String(updatedStock));
+      }
+
       setConfirmedOrder(nextConfirmedOrder);
 
       if (!isTestMode) {
@@ -478,7 +536,10 @@ export default function App() {
           .insert(mapOrderToRow(newWholesaleOrder));
         void supabase
           .from('birga_products')
-          .update({ pool_current: updatedPoolCurrent })
+          .update({
+            stock: updatedStock,
+            pool_current: updatedPoolCurrent,
+          })
           .eq('id', validation.product.id);
       }
     };

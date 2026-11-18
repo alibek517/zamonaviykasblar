@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Loader2,
   Minus,
+  PackageCheck,
   Plus,
   ShoppingBag,
   Sparkles,
@@ -11,7 +12,7 @@ import {
 } from 'lucide-react';
 import type { Product, ProductId } from '../domain/products';
 import type { OrderPricing } from '../domain/pricing';
-import { formatMoney } from '../lib/formatMoney';
+import { formatMoney, formatNumber } from '../lib/formatMoney';
 import { useCountUp } from '../hooks/useCountUp';
 
 interface CalculatorFormProps {
@@ -55,6 +56,9 @@ export function CalculatorForm({
 
   const animatedWholesale = useCountUp(pricing ? pricing.wholesaleTotal : 0);
   const animatedSavings = useCountUp(pricing ? pricing.savings : 0);
+
+  const availableStock = selectedProduct.stock ?? 200;
+  const isOutOfStock = availableStock <= 0;
 
   const wholesaleRatioPercent = pricing
     ? Math.round(100 - pricing.discountPercent)
@@ -126,7 +130,8 @@ export function CalculatorForm({
             >
               {products.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.id} — {item.name} ({item.unit}) • Ulgurji:{' '}
+                  {item.id} — {item.name} ({item.unit}) • Zaxira:{' '}
+                  {formatNumber(item.stock ?? 200)} {item.unit} • Ulgurji:{' '}
                   {formatMoney(item.wholesalePrice)}
                 </option>
               ))}
@@ -143,7 +148,7 @@ export function CalculatorForm({
             )}
           </div>
 
-          {/* 2. Miqdor kiritish */}
+          {/* 2. Miqdor kiritish (ombor qoldig'i chegarasi bilan) */}
           <motion.div
             animate={
               quantityError && !prefersReducedMotion
@@ -161,8 +166,21 @@ export function CalculatorForm({
                 Miqdor ({selectedProduct.unit}){' '}
                 <span className="text-red-600">*</span>
               </label>
-              <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400">
-                Kamida 1 ta butun son
+
+              <span
+                data-testid="calculator-available-stock"
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-[11px] font-bold ${
+                  isOutOfStock
+                    ? 'bg-red-100 text-red-800 dark:bg-red-950/70 dark:text-red-300'
+                    : 'bg-lime-100 text-lime-900 dark:bg-lime-950/70 dark:text-lime-300'
+                }`}
+              >
+                <PackageCheck className="h-3 w-3 shrink-0" />
+                <span>
+                  {isOutOfStock
+                    ? `Omborda: 0 ${selectedProduct.unit}`
+                    : `Mavjud: ${formatNumber(availableStock)} ${selectedProduct.unit}`}
+                </span>
               </span>
             </div>
 
@@ -170,9 +188,10 @@ export function CalculatorForm({
               <button
                 type="button"
                 onClick={() => onStepQuantity(-1)}
+                disabled={isOutOfStock}
                 aria-label="Miqdorni bittaga kamaytirish"
                 data-testid="qty-decrease"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-paper text-ink transition-colors hover:border-ink-primary hover:bg-slate-100 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:h-11 sm:w-11"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-paper text-ink transition-colors hover:border-ink-primary hover:bg-slate-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:h-11 sm:w-11"
               >
                 <Minus className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -188,7 +207,7 @@ export function CalculatorForm({
                 aria-describedby={
                   quantityError ? 'quantity-error' : 'quantity-hint'
                 }
-                placeholder="Masalan: 3"
+                placeholder={`1 – ${formatNumber(availableStock)}`}
                 className={`h-10 w-full min-w-0 rounded-xl border px-2 text-center font-mono text-sm font-bold tabular-nums transition-colors focus:outline-none focus:ring-2 sm:h-11 sm:px-3.5 sm:text-base ${
                   quantityError
                     ? 'border-red-500 bg-red-50/50 text-red-900 focus:border-red-600 focus:ring-red-500/30 dark:border-red-500 dark:bg-red-950/30 dark:text-red-200'
@@ -199,9 +218,14 @@ export function CalculatorForm({
               <button
                 type="button"
                 onClick={() => onStepQuantity(1)}
+                disabled={
+                  isOutOfStock ||
+                  (Number.isInteger(Number(quantity)) &&
+                    Number(quantity) >= availableStock)
+                }
                 aria-label="Miqdorni bittaga ko‘paytirish"
                 data-testid="qty-increase"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-paper text-ink transition-colors hover:border-ink-primary hover:bg-slate-100 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:h-11 sm:w-11"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-paper text-ink transition-colors hover:border-ink-primary hover:bg-slate-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:h-11 sm:w-11"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -219,12 +243,25 @@ export function CalculatorForm({
                 <span className="break-words">{quantityError}</span>
               </p>
             ) : (
-              <p
+              <div
                 id="quantity-hint"
-                className="mt-1 text-[11px] text-slate-600 dark:text-slate-400"
+                className="mt-1.5 flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-600 dark:text-slate-400"
               >
-                Ulgurji partiya miqdorini kiriting (1 – 1 000 000)
-              </p>
+                <span>
+                  Maksimal buyurtma: {formatNumber(availableStock)}{' '}
+                  {selectedProduct.unit}
+                </span>
+                {!isOutOfStock && (
+                  <button
+                    type="button"
+                    data-testid="select-max-stock-btn"
+                    onClick={() => onChangeQuantity(String(availableStock))}
+                    className="font-mono font-bold text-ink-primary underline hover:text-ink dark:text-blue-400"
+                  >
+                    Barchasini tanlash ({formatNumber(availableStock)})
+                  </button>
+                )}
+              </div>
             )}
           </motion.div>
 
@@ -324,10 +361,16 @@ export function CalculatorForm({
                 className="rounded-xl border border-dashed border-amber-400/70 bg-amber-50/60 p-3 text-center dark:border-amber-700/60 dark:bg-amber-950/30"
               >
                 <p className="text-xs font-bold text-amber-900 dark:text-amber-300">
-                  Hisob-kitob uchun to‘g‘ri miqdor kiriting
+                  {isOutOfStock
+                    ? 'Mahsulot omborda qolmagan'
+                    : 'To‘g‘ri miqdor kiriting (1 dan ' +
+                      formatNumber(availableStock) +
+                      ' gacha)'}
                 </p>
                 <p className="mt-0.5 text-[11px] text-amber-800 dark:text-amber-400">
-                  Miqdor kamida 1 bo‘lgan musbat butun son bo‘lishi kerak.
+                  {isOutOfStock
+                    ? 'Boshqa mahsulot tanlang yoki Admin panelidan zaxirani to‘ldiring.'
+                    : `Ombordagi ${formatNumber(availableStock)} ${selectedProduct.unit}dan ortiq kiritib bo‘lmaydi.`}
                 </p>
               </div>
             )}
@@ -384,16 +427,22 @@ export function CalculatorForm({
           {/* 5. Asosiy yuborish tugmasi */}
           <motion.button
             type="submit"
-            disabled={isSubmitting}
-            whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
+            disabled={isSubmitting || isOutOfStock}
+            whileTap={
+              prefersReducedMotion || isOutOfStock
+                ? undefined
+                : { scale: 0.985 }
+            }
             data-testid="submit-button"
-            className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-ink-primary px-3 py-2.5 text-center text-xs font-extrabold text-white shadow-md transition-colors hover:bg-ink disabled:cursor-wait disabled:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink-royal dark:bg-blue-600 dark:hover:bg-blue-500 sm:text-base"
+            className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-ink-primary px-3 py-2.5 text-center text-xs font-extrabold text-white shadow-md transition-colors hover:bg-ink disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink-royal dark:bg-blue-600 dark:hover:bg-blue-500 sm:text-base"
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin sm:h-5 sm:w-5" aria-hidden="true" />
                 <span>Buyurtma rasmiylashtirilmoqda...</span>
               </>
+            ) : isOutOfStock ? (
+              <span>Omborda qolmagan (Tugagan)</span>
             ) : (
               <>
                 <ShoppingBag className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden="true" />

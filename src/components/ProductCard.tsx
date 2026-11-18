@@ -1,8 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import { Check, Store } from 'lucide-react';
+import { Check, PackageCheck, Store } from 'lucide-react';
 import type { Product } from '../domain/products';
 import { calculateDiscountPercent } from '../domain/pricing';
-import { formatMoney } from '../lib/formatMoney';
+import { formatMoney, formatNumber } from '../lib/formatMoney';
 import { ProductIllustration } from './ProductIllustrations';
 
 interface ProductCardProps {
@@ -24,6 +24,8 @@ export function ProductCard({
     product.wholesalePrice
   );
   const unitSaving = product.regularPrice - product.wholesalePrice;
+  const availableStock = product.stock ?? 200;
+  const isOutOfStock = availableStock <= 0;
   const poolCurrent = product.poolCurrent ?? 25;
   const poolTarget = product.poolTarget ?? 50;
   const poolPercent = Math.min(
@@ -48,7 +50,7 @@ export function ProductCard({
         type="button"
         role="radio"
         aria-checked={isSelected}
-        aria-label={`${product.id} ${product.name}, o'lchov birligi ${product.unit}, oddiy narx ${formatMoney(product.regularPrice)}, ulgurji narx ${formatMoney(product.wholesalePrice)}, chegirma ${discountPercent}%`}
+        aria-label={`${product.id} ${product.name}, o'lchov birligi ${product.unit}, omborda ${availableStock} ${product.unit}, oddiy narx ${formatMoney(product.regularPrice)}, ulgurji narx ${formatMoney(product.wholesalePrice)}, chegirma ${discountPercent}%`}
         data-testid={`product-card-${product.id}`}
         onClick={() => onSelect(product.id)}
         className={`group relative flex h-full w-full min-w-0 flex-col justify-between rounded-2xl border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ink-royal sm:p-5 ${
@@ -68,14 +70,26 @@ export function ProductCard({
         )}
 
         <div>
-          {/* Yuqori qator: ID, Birlik va Chegirma foizi */}
+          {/* Yuqori qator: ID, Ombor zaxirasi va Chegirma foizi */}
           <div className="flex w-full flex-wrap items-center justify-between gap-1.5">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="rounded-lg bg-slate-100 px-2 py-0.5 font-mono text-xs font-bold text-ink dark:bg-slate-700 dark:text-slate-100">
                 {product.id}
               </span>
-              <span className="rounded-full border border-slate-200 bg-paper px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                1 {product.unit}
+              <span
+                data-testid={`stock-badge-${product.id}`}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px] font-bold ${
+                  isOutOfStock
+                    ? 'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/70 dark:text-red-300'
+                    : 'border-slate-200 bg-paper text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                }`}
+              >
+                <PackageCheck className="h-3 w-3 shrink-0" />
+                <span>
+                  {isOutOfStock
+                    ? `Tugagan (0 ${product.unit})`
+                    : `Omborda: ${formatNumber(availableStock)} ${product.unit}`}
+                </span>
               </span>
             </div>
 

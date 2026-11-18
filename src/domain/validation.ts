@@ -7,6 +7,7 @@ import {
   type ProductIconType,
   type ProductUnit,
 } from './products';
+import { formatNumber } from '../lib/formatMoney';
 
 export const MAX_QUANTITY = 1_000_000;
 export const STRICT_POSITIVE_INT_REGEX = /^[1-9]\d*$/;
@@ -38,13 +39,24 @@ export type OrderValidationResult =
   | OrderValidationFailure;
 
 /**
- * Miqdor validatsiyasi (qat'iy ^[1-9]\d*$ va <= 1 000 000)
+ * Miqdor validatsiyasi:
+ * - Qat'iy ^[1-9]\d*$
+ * - Ombor qoldig'idan (availableStock) ko'p bo'lishi mumkin emas!
  */
 export function validateQuantityInput(
-  rawInput: string
+  rawInput: string,
+  availableStock?: number,
+  unit: string = 'dona'
 ): FieldValidationResult<number> {
   const raw = String(rawInput ?? '');
   const trimmed = raw.trim();
+
+  if (availableStock !== undefined && availableStock <= 0) {
+    return {
+      valid: false,
+      error: `Ushbu mahsulot omborda qolmagan (0 ${unit}).`,
+    };
+  }
 
   if (trimmed.length === 0) {
     return {
@@ -95,6 +107,13 @@ export function validateQuantityInput(
     return {
       valid: false,
       error: 'Miqdor maksimal chegaradan (1 000 000) oshmasligi kerak.',
+    };
+  }
+
+  if (availableStock !== undefined && parsed > availableStock) {
+    return {
+      valid: false,
+      error: `Omborda faqat ${formatNumber(availableStock)} ${unit} mavjud. Undan ortiq sotib olish mumkin emas!`,
     };
   }
 
@@ -182,7 +201,7 @@ export const OrderFormSchema = z.object({
 });
 
 /**
- * To'liq buyurtma so'rovini tekshirish funksiyasi
+ * To'liq buyurtma so'rovini tekshirish funksiyasi (ombor qoldig'i bilan birga)
  */
 export function validateOrderSubmission(
   input: {
@@ -193,7 +212,10 @@ export function validateOrderSubmission(
   catalog: readonly Product[] = PRODUCTS
 ): OrderValidationResult {
   const productCheck = validateProductId(input.productId, catalog);
-  const qtyCheck = validateQuantityInput(input.quantity);
+  const maxStock = productCheck.value?.stock;
+  const unit = productCheck.value?.unit ?? 'dona';
+
+  const qtyCheck = validateQuantityInput(input.quantity, maxStock, unit);
   const nameCheck = validateCustomerName(input.customerName);
 
   if (
@@ -270,6 +292,14 @@ export function validateProductForm(input: {
   }
 
   const stockCheck = validateQuantityInput(input.stock || '100');
+  if (!stockCheck.valid || stockCheck.value === undefined) {
+    return {
+      valid: false,
+      error:
+        'Ombor zaxirasini to‘g‘ri musbat butun sonda kiriting (kamida 1 ta).',
+    };
+  }
+
   const targetCheck = validateQuantityInput(input.poolTarget || '50');
 
   return {
@@ -282,7 +312,7 @@ export function validateProductForm(input: {
       wholesalePrice: wholeCheck.value,
       shortSpec:
         input.shortSpec.trim() || `${input.category} ulgurji mahsuloti`,
-      stock: stockCheck.valid && stockCheck.value ? stockCheck.value : 100,
+      stock: stockCheck.value,
       poolCurrent: 1,
       poolTarget:
         targetCheck.valid && targetCheck.value ? targetCheck.value : 50,
